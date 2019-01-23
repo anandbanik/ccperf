@@ -229,7 +229,7 @@ async function master(profile, logdir, processes, duration, interval, orgName, e
         cluster.setupMaster({
             args: [profile, logdir, start, duration, interval, delay, orgName, endorsingPeerName, type, num, size, population]
         });
-    
+
         const w = cluster.fork();
 
         promises.push(new Promise(resolve => w.on('exit', resolve)));
@@ -323,12 +323,12 @@ async function master(profile, logdir, processes, duration, interval, orgName, e
             orderer: {
                 tps: latencies[i].orderer.length / period * 1000,
                 avg: average(latencies[i].orderer),
-                pctl: percentile(latencies[i].orderer, 0.9)                
+                pctl: percentile(latencies[i].orderer, 0.9)
             },
             commit: {
                 tps: latencies[i].commit.length / period * 1000,
                 avg: average(latencies[i].commit),
-                pctl: percentile(latencies[i].commit, 0.9)        
+                pctl: percentile(latencies[i].commit, 0.9)
             }
         };
         s = sprintf('%(elapsed)8d %(peer.tps)8.2f %(orderer.tps)11.2f %(commit.tps)10.2f %(peer.avg)8.2f %(orderer.avg)11.2f %(commit.avg)10.2f %(peer.pctl)9.2f %(orderer.pctl)12.2f %(commit.pctl)11.2f', data);
@@ -351,16 +351,40 @@ const handlerTable = {
     }
 }
 
-async function execute(info) {
-    const client = info.client;
-    const channel = info.channel;
-    const txStats = info.txStats;
+function roundRobbinPeerForAllOrgs(context) {
+    return 
+}
+
+function firstOrderer(context) {
+    return context.orderers[0];
+}
+
+const scenarios = {
+    putstate: {
+        preprocess: [],
+        run: [
+            {
+                func: 'putstate',
+                isQuery: false,
+                argsFunc: context =>  [String(context.num), String(context.size), sprintf('key_mychannel_org1_0_%d_%d', context.workerID, context.index)],
+                transientMapFunc: null
+            }
+        ],
+        eventHandlers: [],
+        postprocess: []
+    }
+};
+
+async function execute(context) {
+    const client = context.client;
+    const channel = contxt.channel;
+    const txStats = context.txStats;
 
     const tx_id = client.newTransactionID();
 
     const request = {
-        targets: info.peers,
-        chaincodeId : 'ccperf',
+        targets: context.peers,
+        chaincodeId : context.chaincodeId,
         fcn: info.type,
         args: info.genArgs(info),
         txId: tx_id
@@ -386,7 +410,7 @@ async function execute(info) {
         console.error('Endorsement failure: ' + res.message);
         return;
     }
-   
+
     const proposal = results[1];
 
     const orderer_request = {
@@ -394,7 +418,7 @@ async function execute(info) {
         proposalResponses: proposalResponses,
         proposal: proposal
     };
-    
+
     orderer_results = await channel.sendTransaction(orderer_request);
 
     const t3 = new Date();
@@ -521,7 +545,7 @@ function main() {
         worker(profile, logdir, Number(start), Number(duration), Number(interval), Number(delay), orgName, endorsingPeerName, type, num, size, population);
         return;
     }
-    
+
     program.command('run')
         .option('--logdir [dir]', "Directory name where log files are stored")
         .option('--processes [number]', "Number of processes to be launched")
